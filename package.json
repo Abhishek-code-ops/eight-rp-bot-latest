@@ -1,0 +1,27 @@
+{
+  "name": "eight-streets-roleplay-bot",
+  "version": "2.0.0",
+  "description": "Professional Discord Bot for Eight Streets Roleplay",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "@discordjs/rest": "^2.3.0",
+    "@discordjs/voice": "^0.17.0",
+    "@distube/youtube": "^1.0.4",
+    "discord.js": "^14.14.1",
+    "distube": "^5.1.2",
+    "dotenv": "^16.4.5",
+    "ffmpeg-static": "^5.2.0",
+    "libsodium-wrappers": "^0.7.13",
+    "opusscript": "^0.0.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
