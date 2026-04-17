@@ -61,4 +61,10 @@ module.exports = {
 
   // ── Cooldowns (seconds) ─────────────────────────────────────
   defaultCooldown: 3,
+
+  
+  "WHITELIST_ROLE_ID": "",
+  "AUDIT_CHANNEL_ID": "",
+  "BAD_WORDS": [],
+  "userViolations": {}
 };
