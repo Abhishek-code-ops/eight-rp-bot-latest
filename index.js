@@ -4,13 +4,17 @@ const {
   GatewayIntentBits,
   Partials,
   Collection,
+  EmbedBuilder,
 } = require('discord.js');
-
+const fs = require('fs');
+const config = require('./config.json');
+const { DisTube } = require('distube');
+const { YouTubePlugin } = require('@distube/youtube');
 const { loadCommands } = require('./handlers/commandHandler');
 const { loadEvents }   = require('./handlers/eventHandler');
 
 // ──────────────────────────────────────────────────────────────
-//  Client
+//  Client Configuration
 // ──────────────────────────────────────────────────────────────
 const client = new Client({
   intents: [
@@ -30,9 +34,10 @@ const client = new Client({
     Partials.Reaction,
   ],
 });
-const { DisTube } = require('distube');
-const { YouTubePlugin } = require('@distube/youtube');
 
+// ──────────────────────────────────────────────────────────────
+//  Music Setup (DisTube)
+// ──────────────────────────────────────────────────────────────
 client.distube = new DisTube(client, {
   plugins: [new YouTubePlugin()],
 });
@@ -48,57 +53,26 @@ client.distube
     console.error(error);
     channel.send('❌ Music error occurred');
   });
+
 // ──────────────────────────────────────────────────────────────
 //  Collections
 // ──────────────────────────────────────────────────────────────
-client.commands   = new Collection(); // name  → command module
-client.cooldowns  = new Collection(); // name  → userID → timestamp
-client.musicQueues = new Map();        // guildID → GuildQueue
+client.commands    = new Collection(); 
+client.cooldowns   = new Collection(); 
+client.musicQueues = new Map();        
 
 // ──────────────────────────────────────────────────────────────
-//  Boot
+//  Logger & Auto-Mod Helpers
 // ──────────────────────────────────────────────────────────────
-(async () => {
-  try {
-    console.log('[Boot] Loading commands...');
-    await loadCommands(client);
-
-    console.log('[Boot] Loading events...');
-    await loadEvents(client);
-
-    console.log('[Boot] Logging in...');
-    await client.login(process.env.DISCORD_TOKEN);
-  } catch (err) {
-    console.error('[Boot] Fatal error:', err);
-    process.exit(1);
-  }
-})();
-
-// ──────────────────────────────────────────────────────────────
-//  Global error guards
-// ──────────────────────────────────────────────────────────────
-process.on('unhandledRejection', (err) =>
-  console.error('[UnhandledRejection]', err)
-);
-process.on('uncaughtException', (err) =>
-  console.error('[UncaughtException]', err)
-);
-
-const { Client, GatewayIntentBits, EmbedBuilder, Collection } = require('discord.js');
-const fs = require('fs');
-const config = require('./config.json');
-
-const client = new Client({
-    intents: [3276799] // Includes all necessary intents
-});
 
 // Helper for LoggerBot style embeds
 async function sendLog(guild, embed) {
+    if (!config.AUDIT_CHANNEL_ID) return;
     const channel = guild.channels.cache.get(config.AUDIT_CHANNEL_ID);
     if (channel) channel.send({ embeds: [embed.setTimestamp()] });
 }
 
-// SCALING TIMEOUT FUNCTION
+// SCALING PUNISHMENT FUNCTION
 async function applyPunishment(message, reason) {
     const userId = message.author.id;
     if (!config.userViolations) config.userViolations = {};
@@ -124,8 +98,12 @@ async function applyPunishment(message, reason) {
         
         sendLog(message.guild, log);
         await message.author.send(`You have been timed out for ${label} due to: ${reason}`).catch(() => null);
-    } catch (e) { console.error("Could not timeout user.") }
+    } catch (e) { console.error("Could not timeout user - Check Permissions.") }
 }
+
+// ──────────────────────────────────────────────────────────────
+//  Event Listeners (Logger & Auto-Mod)
+// ──────────────────────────────────────────────────────────────
 
 // MESSAGE EVENTS (Links & Words)
 client.on('messageCreate', async (message) => {
@@ -147,7 +125,7 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// LOGGERBOT STYLE LOGS
+// LOGGER: Message Edits
 client.on('messageUpdate', (oldM, newM) => {
     if (oldM.author.bot || oldM.content === newM.content) return;
     const log = new EmbedBuilder()
@@ -162,6 +140,7 @@ client.on('messageUpdate', (oldM, newM) => {
     sendLog(oldM.guild, log);
 });
 
+// LOGGER: Message Deletes
 client.on('messageDelete', (m) => {
     if (m.author?.bot) return;
     const log = new EmbedBuilder()
@@ -175,6 +154,7 @@ client.on('messageDelete', (m) => {
     sendLog(m.guild, log);
 });
 
+// LOGGER: Role Updates
 client.on('guildMemberUpdate', (oldM, newM) => {
     const added = newM.roles.cache.filter(r => !oldM.roles.cache.has(r.id));
     const removed = oldM.roles.cache.filter(r => !newM.roles.cache.has(r.id));
@@ -189,17 +169,44 @@ client.on('guildMemberUpdate', (oldM, newM) => {
         removed.forEach(r => log.addFields({ name: "Role Removed", value: `<@&${r.id}>`, inline: true }));
         sendLog(newM.guild, log);
     }
-    client.on('guildBanAdd', async (ban) => {
+});
+
+// LOGGER: Bans
+client.on('guildBanAdd', async (ban) => {
     const log = new EmbedBuilder()
         .setAuthor({ name: "User Banned", iconURL: ban.user.displayAvatarURL() })
-        .setColor("#ff0000") // Red
+        .setColor("#ff0000") 
         .setDescription(`**User:** ${ban.user.tag}\n**ID:** ${ban.user.id}`)
         .setFooter({ text: "Manual Ban Detected" });
     
     sendLog(ban.guild, log);
 });
-});
-    
 
+// ──────────────────────────────────────────────────────────────
+//  Boot Sequence
+// ──────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    console.log('[Boot] Loading commands...');
+    await loadCommands(client);
 
-client.login('YOUR_TOKEN');
+    console.log('[Boot] Loading events...');
+    await loadEvents(client);
+
+    console.log('[Boot] Logging in...');
+    await client.login(process.env.DISCORD_TOKEN);
+  } catch (err) {
+    console.error('[Boot] Fatal error:', err);
+    process.exit(1);
+  }
+})();
+
+// ──────────────────────────────────────────────────────────────
+//  Global Error Guards
+// ──────────────────────────────────────────────────────────────
+process.on('unhandledRejection', (err) =>
+  console.error('[UnhandledRejection]', err)
+);
+process.on('uncaughtException', (err) =>
+  console.error('[UncaughtException]', err)
+);
